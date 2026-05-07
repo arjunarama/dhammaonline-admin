@@ -10,9 +10,16 @@ type Teaching = {
   category: string;
 };
 
+type Admin = {
+  id: number;
+  username: string;
+  role: string;
+};
+
 export default function AdminDashboard() {
   const router = useRouter();
   const [teachings, setTeachings] = useState<Teaching[]>([]);
+  const [admins, setAdmins] = useState<Admin[]>([]);
 
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("");
@@ -23,6 +30,8 @@ export default function AdminDashboard() {
   const [adminPassword, setAdminPassword] = useState("");
 
   const [adminRole, setAdminRole] = useState("admin");
+
+  const [editingAdminId, setEditingAdminId] = useState<number | null>(null);
 
   const [editingId, setEditingId] = useState<number | null>(null);
 
@@ -49,7 +58,31 @@ useEffect(() => {
 
   fetchTeachings();
 
+  if (
+  localStorage.getItem("role") === "superadmin"
+) {
+  fetchAdmins();
+}
+
 }, []);
+
+async function fetchAdmins() {
+
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_URL}/admins`,
+    {
+      headers: {
+        "Authorization": `Bearer ${localStorage.getItem("token")}`,
+      },
+    }
+  );
+
+  if (!response.ok) return;
+
+  const data = await response.json();
+
+  setAdmins(data);
+}
 
   async function createTeaching() {
     if (!title || !category) return;
@@ -126,6 +159,85 @@ useEffect(() => {
   setAdminUsername("");
   setAdminPassword("");
   setAdminRole("admin");
+
+  fetchAdmins();
+}
+
+async function updateAdmin() {
+
+  if (!editingAdminId) return;
+
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_URL}/admins/${editingAdminId}`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${localStorage.getItem("token")}`,
+      },
+      body: JSON.stringify({
+        username: adminUsername,
+        password: adminPassword,
+        role: adminRole,
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    alert("Failed to update admin");
+    return;
+  }
+
+  alert("Admin updated successfully");
+
+  setEditingAdminId(null);
+
+  setAdminUsername("");
+  setAdminPassword("");
+  setAdminRole("admin");
+
+  fetchAdmins();
+}
+
+async function deleteAdmin(id: number) {
+
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_URL}/admins/${id}`,
+    {
+      method: "DELETE",
+      headers: {
+        "Authorization": `Bearer ${localStorage.getItem("token")}`,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    alert("Failed to delete admin");
+    return;
+  }
+
+  alert("Admin deleted successfully");
+
+  setEditingAdminId(null);
+
+setAdminUsername("");
+
+setAdminPassword("");
+
+setAdminRole("admin");
+
+  fetchAdmins();
+}
+
+function startEditingAdmin(admin: Admin) {
+
+  setEditingAdminId(admin.id);
+
+  setAdminUsername(admin.username);
+
+  setAdminRole(admin.role);
+
+  setAdminPassword("");
 }
 
   function startEditing(teaching: Teaching) {
@@ -209,11 +321,65 @@ useEffect(() => {
 </div>
 
 <button
-  onClick={createAdmin}
+  onClick={
+    editingAdminId
+      ? updateAdmin
+      : createAdmin
+  }
   className="mt-6 bg-yellow-500 text-black px-6 py-3 rounded-xl font-semibold hover:bg-yellow-400 transition"
 >
-  Create Admin
+  {editingAdminId
+    ? "Update Admin"
+    : "Create Admin"}
 </button>
+
+<div className="mt-10 border border-stone-800 rounded-2xl overflow-hidden">
+
+  <div className="grid grid-cols-12 bg-black px-6 py-4 border-b border-stone-800 font-semibold text-stone-300">
+    <div className="col-span-5">Username</div>
+    <div className="col-span-4">Role</div>
+    <div className="col-span-3 text-right">Actions</div>
+  </div>
+
+  {admins.map((admin) => (
+
+    <div
+      key={admin.id}
+      className="grid grid-cols-12 px-6 py-4 border-b border-stone-900 items-center"
+    >
+
+      <div className="col-span-5">
+        {admin.username}
+      </div>
+
+      <div className="col-span-4 text-stone-400">
+        {admin.role}
+      </div>
+
+      <div className="col-span-3 text-right">
+
+    <button
+  onClick={() => startEditingAdmin(admin)}
+  className="bg-blue-500 hover:bg-blue-400 px-4 py-2 rounded-lg transition mr-3"
+>
+  Update
+</button>
+        
+        <button
+  onClick={() => deleteAdmin(admin.id)}
+  className="bg-red-500 hover:bg-red-400 px-4 py-2 rounded-lg transition"
+>
+  Delete
+</button>
+
+      </div>
+
+    </div>
+
+  ))}
+
+</div>
+
 
   </div>
 
