@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+
 
 type Teaching = {
   id: number;
@@ -9,10 +11,18 @@ type Teaching = {
 };
 
 export default function AdminDashboard() {
+  const router = useRouter();
   const [teachings, setTeachings] = useState<Teaching[]>([]);
 
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("");
+  const [role, setRole] = useState("");
+
+  const [adminUsername, setAdminUsername] = useState("");
+
+  const [adminPassword, setAdminPassword] = useState("");
+
+  const [adminRole, setAdminRole] = useState("admin");
 
   const [editingId, setEditingId] = useState<number | null>(null);
 
@@ -24,9 +34,22 @@ export default function AdminDashboard() {
     setTeachings(data);
   }
 
-  useEffect(() => {
-    fetchTeachings();
-  }, []);
+useEffect(() => {
+
+  const token = localStorage.getItem("token");
+
+  if (!token) {
+    router.push("/login");
+    return;
+  }
+
+  setRole(
+    localStorage.getItem("role") || ""
+  );
+
+  fetchTeachings();
+
+}, []);
 
   async function createTeaching() {
     if (!title || !category) return;
@@ -35,6 +58,7 @@ export default function AdminDashboard() {
   method: "POST",
   headers: {
     "Content-Type": "application/json",
+      "Authorization": `Bearer ${localStorage.getItem("token")}`,
   },
   body: JSON.stringify({
     title,
@@ -74,6 +98,36 @@ export default function AdminDashboard() {
     fetchTeachings();
   }
 
+  async function createAdmin() {
+
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_URL}/create-admin`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${localStorage.getItem("token")}`,
+      },
+      body: JSON.stringify({
+        username: adminUsername,
+        password: adminPassword,
+        role: adminRole,
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    alert("Failed to create admin");
+    return;
+  }
+
+  alert("Admin created successfully");
+
+  setAdminUsername("");
+  setAdminPassword("");
+  setAdminRole("admin");
+}
+
   function startEditing(teaching: Teaching) {
     setEditingId(teaching.id);
 
@@ -92,9 +146,78 @@ export default function AdminDashboard() {
     <main className="min-h-screen bg-black text-white px-6 py-16">
       <div className="max-w-5xl mx-auto">
 
-        <h1 className="text-5xl font-bold text-yellow-400 mb-12">
-          Dhamma Online Admin
-        </h1>
+        <div className="flex items-center justify-between mb-12">
+
+          <h1 className="text-5xl font-bold text-yellow-400">
+            Dhamma Online Admin
+          </h1>
+
+          <button
+            onClick={() => {
+              localStorage.removeItem("token");
+              router.push("/login");
+            }}
+            className="bg-red-500 hover:bg-red-400 text-white px-5 py-3 rounded-2xl transition"
+          >
+            Logout
+          </button>
+
+        </div>
+
+
+{role === "superadmin" && (
+
+  <div className="bg-stone-950 border border-stone-800 rounded-3xl p-8 mb-12">
+
+    <h2 className="text-3xl font-semibold text-yellow-400 mb-4">
+      Admin Management
+    </h2>
+
+<div className="grid gap-4 md:grid-cols-3">
+
+  <input
+    type="text"
+    placeholder="Username"
+    value={adminUsername}
+    onChange={(e) =>
+      setAdminUsername(e.target.value)
+    }
+    className="bg-black border border-stone-700 rounded-xl px-4 py-3 outline-none focus:border-yellow-500"
+  />
+
+  <input
+    type="password"
+    placeholder="Password"
+    value={adminPassword}
+    onChange={(e) =>
+      setAdminPassword(e.target.value)
+    }
+    className="bg-black border border-stone-700 rounded-xl px-4 py-3 outline-none focus:border-yellow-500"
+  />
+
+  <select
+    value={adminRole}
+    onChange={(e) =>
+      setAdminRole(e.target.value)
+    }
+    className="bg-black border border-stone-700 rounded-xl px-4 py-3 outline-none focus:border-yellow-500"
+  >
+    <option value="admin">Admin</option>
+    <option value="editor">Editor</option>
+  </select>
+
+</div>
+
+<button
+  onClick={createAdmin}
+  className="mt-6 bg-yellow-500 text-black px-6 py-3 rounded-xl font-semibold hover:bg-yellow-400 transition"
+>
+  Create Admin
+</button>
+
+  </div>
+
+)}
 
         {/* Form */}
         <div className="bg-stone-950 border border-stone-800 rounded-3xl p-8 mb-12">
