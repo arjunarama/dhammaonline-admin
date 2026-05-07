@@ -51,6 +51,7 @@ export default function AdminDashboard() {
   const [fullContent, setFullContent] = useState("");
   const [thumbnailImageUrl, setThumbnailImageUrl] = useState("");
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadError, setUploadError] = useState("");
 
   const [adminUsername, setAdminUsername] = useState("");
 
@@ -121,7 +122,7 @@ async function fetchAdmins() {
   async function createTeaching() {
     if (!canCreateTeaching) return;
 
-    await fetch(`${process.env.NEXT_PUBLIC_API_URL}/teachings`, {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/teachings`, {
   method: "POST",
   headers: {
     "Content-Type": "application/json",
@@ -136,6 +137,11 @@ async function fetchAdmins() {
   thumbnail_image_url: thumbnailImageUrl,
   }),
 });
+
+    if (!response.ok) {
+      alert("Failed to create teaching");
+      return;
+    }
 
     resetForm();
 console.log(thumbnailImageUrl);
@@ -173,6 +179,7 @@ console.log(thumbnailImageUrl);
   file: File
 ) {
     setUploadingImage(true);
+    setUploadError("");
 
   try {
     const formData = new FormData();
@@ -190,16 +197,21 @@ console.log(thumbnailImageUrl);
       }
     );
 
+    const data = await response.json();
+
     if (!response.ok) {
-      alert("Image upload failed");
+      setUploadError(data.detail || data.error || "Image upload failed");
       return null;
     }
 
-    const data = await response.json();
+    if (!data.image_url) {
+      setUploadError("Image upload finished without returning an image URL");
+      return null;
+    }
 
     return data.image_url;
   } catch {
-    alert("Image upload failed");
+    setUploadError("Image upload failed. Please try again.");
     return null;
   } finally {
     setUploadingImage(false);
@@ -333,6 +345,7 @@ function startEditingAdmin(admin: Admin) {
     setShortDescription("");
     setFullContent("");
     setThumbnailImageUrl("");
+    setUploadError("");
   }
 
   return (
@@ -531,6 +544,7 @@ function startEditingAdmin(admin: Admin) {
 
                 if (!file) return;
 
+                setThumbnailImageUrl("");
                 const imageUrl = await uploadImage(file);
 
                 if (imageUrl) {
@@ -541,6 +555,24 @@ function startEditingAdmin(admin: Admin) {
               }}
               className="w-full"
             />
+
+            {uploadingImage && (
+              <p className="mt-2 text-sm text-stone-400">
+                Uploading thumbnail image...
+              </p>
+            )}
+
+            {thumbnailImageUrl && (
+              <p className="mt-2 text-sm text-green-400">
+                Thumbnail image uploaded.
+              </p>
+            )}
+
+            {uploadError && (
+              <p className="mt-2 text-sm text-red-400">
+                {uploadError}
+              </p>
+            )}
 
           </div>
 
@@ -571,6 +603,8 @@ function startEditingAdmin(admin: Admin) {
               >
                 {uploadingImage
                   ? "Uploading..."
+                  : !thumbnailImageUrl
+                    ? "Upload Image First"
                   : "Create Teaching"}
               </button>
             )}
