@@ -204,8 +204,13 @@ console.log(thumbnailImageUrl);
       return null;
     }
 
+    if (data.error || data.detail) {
+      setUploadError(data.detail || data.error);
+      return null;
+    }
+
     if (!data.image_url) {
-      setUploadError("Image upload finished without returning an image URL");
+      setUploadError("Image upload finished without returning an image URL. Please check the backend upload response.");
       return null;
     }
 
