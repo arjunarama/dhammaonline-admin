@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 
 
@@ -8,6 +8,12 @@ type Teaching = {
   id: number;
   title: string;
   category: string;
+  slug: string;
+  short_description: string;
+  full_content: string;
+  thumbnail_image_url?: string;
+  banner_image_url?: string;
+  featured_image_url?: string;
 };
 
 type Admin = {
@@ -16,14 +22,35 @@ type Admin = {
   role: string;
 };
 
+function subscribeToRoleChange() {
+  return () => {};
+}
+
+function getRoleSnapshot() {
+  return localStorage.getItem("role") || "";
+}
+
+function getServerRoleSnapshot() {
+  return "";
+}
+
 export default function AdminDashboard() {
   const router = useRouter();
+  const role = useSyncExternalStore(
+    subscribeToRoleChange,
+    getRoleSnapshot,
+    getServerRoleSnapshot
+  );
   const [teachings, setTeachings] = useState<Teaching[]>([]);
   const [admins, setAdmins] = useState<Admin[]>([]);
 
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("");
-  const [role, setRole] = useState("");
+  const [slug, setSlug] = useState("");
+  const [shortDescription, setShortDescription] = useState("");
+  const [fullContent, setFullContent] = useState("");
+  const [thumbnailImageUrl, setThumbnailImageUrl] = useState("");
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   const [adminUsername, setAdminUsername] = useState("");
 
@@ -34,6 +61,12 @@ export default function AdminDashboard() {
   const [editingAdminId, setEditingAdminId] = useState<number | null>(null);
 
   const [editingId, setEditingId] = useState<number | null>(null);
+
+  const canCreateTeaching =
+    title.trim() &&
+    category.trim() &&
+    thumbnailImageUrl &&
+    !uploadingImage;
 
   async function fetchTeachings() {
     const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/teachings`);
@@ -46,25 +79,26 @@ export default function AdminDashboard() {
 useEffect(() => {
 
   const token = localStorage.getItem("token");
+  const storedRole = localStorage.getItem("role") || "";
 
   if (!token) {
     router.push("/login");
     return;
   }
 
-  setRole(
-    localStorage.getItem("role") || ""
-  );
+  const timeoutId = window.setTimeout(() => {
+    fetchTeachings();
 
-  fetchTeachings();
+    if (
+    storedRole === "superadmin"
+  ) {
+    fetchAdmins();
+  }
+  }, 0);
 
-  if (
-  localStorage.getItem("role") === "superadmin"
-) {
-  fetchAdmins();
-}
+  return () => window.clearTimeout(timeoutId);
 
-}, []);
+}, [router]);
 
 async function fetchAdmins() {
 
@@ -85,7 +119,7 @@ async function fetchAdmins() {
 }
 
   async function createTeaching() {
-    if (!title || !category) return;
+    if (!canCreateTeaching) return;
 
     await fetch(`${process.env.NEXT_PUBLIC_API_URL}/teachings`, {
   method: "POST",
@@ -94,13 +128,17 @@ async function fetchAdmins() {
       "Authorization": `Bearer ${localStorage.getItem("token")}`,
   },
   body: JSON.stringify({
-    title,
-    category,
+  title,
+  slug,
+  category,
+  short_description: shortDescription,
+  full_content: fullContent,
+  thumbnail_image_url: thumbnailImageUrl,
   }),
 });
 
     resetForm();
-
+console.log(thumbnailImageUrl);
     fetchTeachings();
   }
 
@@ -130,6 +168,45 @@ async function fetchAdmins() {
 
     fetchTeachings();
   }
+
+  async function uploadImage(
+  file: File
+) {
+    setUploadingImage(true);
+
+  try {
+    const formData = new FormData();
+
+    formData.append("file", file);
+
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_API_URL}/upload-image`,
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: formData,
+      }
+    );
+
+    if (!response.ok) {
+      alert("Image upload failed");
+      return null;
+    }
+
+    const data = await response.json();
+
+    return data.image_url;
+  } catch {
+    alert("Image upload failed");
+    return null;
+  } finally {
+    setUploadingImage(false);
+  }
+}
+
+
 
   async function createAdmin() {
 
@@ -251,7 +328,11 @@ function startEditingAdmin(admin: Admin) {
     setEditingId(null);
 
     setTitle("");
+    setSlug("");
     setCategory("");
+    setShortDescription("");
+    setFullContent("");
+    setThumbnailImageUrl("");
   }
 
   return (
@@ -403,11 +484,66 @@ function startEditingAdmin(admin: Admin) {
 
             <input
               type="text"
+              placeholder="Slug"
+              value={slug}
+              onChange={(e) => setSlug(e.target.value)}
+              className="w-full bg-black border border-stone-700 rounded-xl px-4 py-3 outline-none focus:border-yellow-500"
+            />
+
+            <input
+              type="text"
               placeholder="Category"
               value={category}
               onChange={(e) => setCategory(e.target.value)}
               className="bg-black border border-stone-700 rounded-xl px-4 py-3 outline-none focus:border-yellow-500"
             />
+
+            <textarea
+              placeholder="Short Description"
+              value={shortDescription}
+              onChange={(e) =>
+                setShortDescription(e.target.value)
+              }
+              className="w-full bg-black border border-stone-700 rounded-xl px-4 py-3 outline-none focus:border-yellow-500 min-h-[120px]"
+            />
+
+            <textarea
+              placeholder="Full Content"
+              value={fullContent}
+              onChange={(e) =>
+                setFullContent(e.target.value)
+              }
+              className="w-full bg-black border border-stone-700 rounded-xl px-4 py-3 outline-none focus:border-yellow-500 min-h-[240px]"
+            />
+
+              <div>
+
+            <label className="block mb-2 text-stone-300">
+              Thumbnail Image
+            </label>
+
+            <input
+              type="file"
+              accept="image/*"
+              onChange={async (e) => {
+
+                const file = e.target.files?.[0];
+
+                if (!file) return;
+
+                const imageUrl = await uploadImage(file);
+
+                if (imageUrl) {
+                  console.log(imageUrl);
+                  setThumbnailImageUrl(imageUrl);
+                }
+
+              }}
+              className="w-full"
+            />
+
+          </div>
+
           </div>
 
           <div className="flex gap-4 mt-6">
@@ -430,9 +566,12 @@ function startEditingAdmin(admin: Admin) {
             ) : (
               <button
                 onClick={createTeaching}
-                className="bg-yellow-500 text-black px-6 py-3 rounded-xl font-semibold hover:bg-yellow-400 transition"
+                disabled={!canCreateTeaching}
+                className="bg-yellow-500 text-black px-6 py-3 rounded-xl font-semibold hover:bg-yellow-400 transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Create Teaching
+                {uploadingImage
+                  ? "Uploading..."
+                  : "Create Teaching"}
               </button>
             )}
           </div>
@@ -452,9 +591,24 @@ function startEditingAdmin(admin: Admin) {
               key={teaching.id}
               className="grid grid-cols-12 px-6 py-5 border-b border-stone-900 items-center"
             >
-              <div className="col-span-4 font-medium">
-                {teaching.title}
-              </div>
+              <div className="col-span-4 flex items-center gap-3 min-w-0">
+
+  {teaching.thumbnail_image_url && (
+
+    <img
+      src={teaching.thumbnail_image_url}
+      alt={teaching.title}
+      className="w-20 h-12 object-cover rounded-lg flex-shrink-0"
+    />
+
+  )}
+
+  <div className="font-medium">
+    {teaching.title}
+  </div>
+
+</div>
+               
 
               <div className="col-span-4 text-stone-400">
                 {teaching.category}
